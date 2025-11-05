@@ -1,0 +1,380 @@
+---
+title: "Lab 7: Data Visualization with COVID-19 Reporting"
+author: "Sammi Lai"
+format:
+  html:
+    toc: true
+    toc_float: true
+    code-fold: true
+    embed-resources: true
+    theme: 
+      - lux
+      - custom.scss
+    font:
+      google:
+        family: "Lato"
+        weights: [400, 700, 900]
+execute: 
+  warning: false
+  message: false
+---
+
+```{r}
+
+library(tidyverse)
+library(lubridate)
+library(gganimate)
+library(gifski)
+theme_set(theme_bw())
+
+```
+
+## Chapter 5 Example Code
+
+::: panel-tabset
+## 5.2
+
+```{r eval = FALSE}
+
+#rules for tidying datasets: 
+#Each variable is a column; each column is a variable.
+#Each observation is a row; each row is an observation.
+#Each value is a cell; each cell is a single value.
+
+#> # A tibble: 6 × 4
+#>   country      year  cases population
+#>   <chr>       <dbl>  <dbl>      <dbl>
+#> 1 Afghanistan  1999    745   19987071
+#> 2 Afghanistan  2000   2666   20595360
+#> 3 Brazil       1999  37737  172006362
+#> 4 Brazil       2000  80488  174504898
+#> 5 China        1999 212258 1272915272
+#> 6 China        2000 213766 1280428583
+
+#uses table to compute the rate per 10000 people
+table1 |>
+  mutate(rate = cases / population * 10000)
+#> # A tibble: 6 × 5
+#>   country      year  cases population  rate
+#>   <chr>       <dbl>  <dbl>      <dbl> <dbl>
+#> 1 Afghanistan  1999    745   19987071 0.373
+#> 2 Afghanistan  2000   2666   20595360 1.29 
+#> 3 Brazil       1999  37737  172006362 2.19 
+#> 4 Brazil       2000  80488  174504898 4.61 
+#> 5 China        1999 212258 1272915272 1.67 
+#> 6 China        2000 213766 1280428583 1.67
+
+#compute total cases per year
+table1 |> 
+  group_by(year) |> 
+  summarize(total_cases = sum(cases))
+#> # A tibble: 2 × 2
+#>    year total_cases
+#>   <dbl>       <dbl>
+#> 1  1999      250740
+#> 2  2000      296920
+
+
+```
+
+## 5.3
+
+```{r}
+
+#billboard
+
+#tidy data with pivot_longer(), increasing # of rows + easier readability 
+#decreasing # of columns
+
+#changes original "wk#" columns into one column "week", and instead of the song rank
+#displayed under every "Wk" column, it has its own "rank" column so every observation
+#is read as one row
+
+billboard |> 
+  pivot_longer(
+    cols = starts_with("wk"), 
+    names_to = "week", 
+    values_to = "rank"
+  )
+
+#"week" and "rank" are quoted because those are new variables we’re creating, they don’t yet exist in the data when we run the pivot_longer() call
+
+#drops all "missing" values that take up extra space in dataset, so a song that was in
+#top 100 for 7 weeks only does not have 76 entries with 69 having "NA" under rank.
+#cols specifies which columns to pivot
+billboard |> 
+  pivot_longer(
+    cols = starts_with("wk"), 
+    names_to = "week", 
+    values_to = "rank",
+    values_drop_na = TRUE
+  )  
+    
+#parse_number() extracts first number from string + ignores other text
+billboard_longer <- billboard |> 
+  pivot_longer(
+    cols = starts_with("wk"), 
+    names_to = "week", 
+    values_to = "rank",
+    values_drop_na = TRUE
+  ) |> 
+  mutate(
+    week = parse_number(week)
+  )
+billboard_longer  
+
+#-------------------------------------------------------------------------------
+#new table example, patients with ID A,B,C w/ 2 blood pressure measurements  
+df <- tribble(
+  ~id,  ~bp1, ~bp2,
+   "A",  100,  120,
+   "B",  140,  115,
+   "C",  120,  125
+)  
+
+#pivots data so that bp1 and bp2 under one measurement column, and value column for each
+#measurement 
+df |> 
+  pivot_longer(
+    cols = bp1:bp2,
+    names_to = "measurement",
+    values_to = "value"
+  )
+    
+#ex: original column name has 3 diff variables separated by "_", pivot them into 3 new
+#columns for readability
+who2 |> 
+  pivot_longer(
+    cols = !(country:year),
+    names_to = c("diagnosis", "gender", "age"), 
+    names_sep = "_",
+    values_to = "count"
+  )
+
+#".value" recognizes child1 and child2, pivots into child, dob, and name columns
+household |> 
+  pivot_longer(
+    cols = !family, 
+    names_to = c(".value", "child"), 
+    names_sep = "_", 
+    values_drop_na = TRUE
+  )
+
+```
+
+## 5.4
+
+```{r}
+
+#pivot_wider() has the opposite interface to pivot_longer(): instead of choosing 
+#new column names, we need to provide the existing columns that define the values 
+#(values_from) and the column name (names_from)
+
+df <- tribble(
+  ~id, ~measurement, ~value,
+  "A",        "bp1",    100,
+  "B",        "bp1",    140,
+  "B",        "bp2",    115, 
+  "A",        "bp2",    120,
+  "A",        "bp3",    105
+)
+
+#widens columns so each bp measurement has a column with all values listed in row
+df |> 
+  pivot_wider(
+    names_from = measurement,
+    values_from = value
+  )
+
+```
+:::
+
+## Chapter 5 Exercises
+
+**1.** For each of the sample tables, describe what each observation and each column represents.
+
+```         
+In Table 1 each column is a single variable (country, year, cases, 
+population), and each observation is an entire row, so that reading 
+across the row will give you one observation containing a value for 
+every variable. 
+
+In Table 2, the observation from table 1 is split into two: cases and
+population, and the columns are now country, year, type (case/pop), 
+and count. In order to get the full observation for one year in a
+given country, you now must read 2 rows. 
+
+Table 3 has the least columns (country, year, rate) and the 
+observation is the cases per population in one year within a country.
+However, if someone was only given table 3, I think the rate label lacks 
+information for a reader to identify the variable properly. 
+```
+
+**2.** Sketch out the process you’d use to calculate the rate for **table2** and **table3**. You will need to perform four operations:
+
+-   Extract the number of TB cases per country per year.
+
+-   Extract the matching population per country per year.
+
+-   Divide cases by population, and multiply by 10000.
+
+-   Store back in the appropriate place.
+
+```         
+Table 2
+I would first group the table by country and year, and then within the group
+the calculation can be done by finding the count value of "cases" and 
+"population", dividing the cases by population and multiplying by 10000.
+A new row can be created within the groups for the rate, following the way the
+data was originally displayed. 
+
+Table 3
+I would split the already given rate ratio into two integers, giving 
+each new columns to do the calculation and then modify the rate column 
+values with the newly calculated values.
+```
+
+## Setup
+
+```{r eval = FALSE}
+
+#download data directly with link, only once
+
+download.file(url="https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv", 
+              destfile = "time_series_covid19_confirmed_global.csv")
+
+```
+
+```{r}
+
+#load data
+
+timeSeriesConfirmed <- read_csv("time_series_covid19_confirmed_global.csv")|>
+  rename(Province_State = "Province/State", Country_Region = "Country/Region")
+
+#pivot to long form
+timeSeriesConfirmedLong <- timeSeriesConfirmed |> 
+               pivot_longer(-c(Province_State, Country_Region, Lat, Long),
+                            names_to = "Date", values_to = "Confirmed") 
+
+timeSeriesConfirmedLong$Date <- mdy(timeSeriesConfirmedLong$Date)
+
+```
+
+## Lab Exercises
+
+### Exercise 2
+
+Instead of making a graph of 5 countries on the same graph as in the above example, use **facet_wrap** with **scales = "free_y"**.
+
+```{r}
+
+timeSeriesConfirmedLong |> 
+    group_by(Country_Region, Date) |> 
+    summarise(Confirmed = sum(Confirmed)) |> 
+    filter (Country_Region %in% c("China","France","Italy", 
+                                "Korea, South", "US")) |> 
+    ggplot(aes(x = Date, y = Confirmed)) + 
+      geom_point() +
+      geom_line() +
+      facet_wrap(~ Country_Region, scales = "free_y") +
+      ggtitle("COVID-19 Confirmed Cases") +
+      labs(y = "# of Cases")
+
+```
+
+### Exercise 3
+
+Using the daily count of confirmed cases, make a single graph with 5 countries of your choosing.
+
+```{r}
+
+timeSeriesConfirmedLong_daily <-timeSeriesConfirmedLong |> 
+    group_by(Country_Region, Date) |> 
+    summarise(Confirmed = sum(Confirmed)) |> 
+    mutate(Daily = Confirmed - lag(Confirmed, default = first(Confirmed )))
+
+timeSeriesConfirmedLong_daily |> 
+    filter (Country_Region %in% c("China","Malaysia","Belgium", 
+                                "Germany", "Singapore")) |> 
+    ggplot(aes(x = Date,  y = Daily, color = Country_Region)) + 
+      geom_line() +
+      ggtitle("Daily COVID-19 Confirmed Cases") +
+      labs(y = "# of Cases")
+
+```
+
+### Exercise 4
+
+Plot the **cumulative deaths** in the US, Canada and Mexico (you will need to download time_series_covid19_deaths_global.csv)
+
+```{r eval = FALSE}
+
+download.file(url="https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv", 
+              destfile = "time_series_covid19_deaths_global.csv")
+
+```
+
+```{r}
+
+timeSeriesDeaths <- read_csv("time_series_covid19_deaths_global.csv") |>
+  rename(Province_State = "Province/State", Country_Region = "Country/Region")
+
+timeSeriesDeaths <- timeSeriesDeaths |> 
+               pivot_longer(-c(Province_State, Country_Region, Lat, Long),
+                            names_to = "Date", values_to = "Deaths") 
+
+timeSeriesDeaths$Date <- mdy(timeSeriesDeaths$Date)
+
+timeSeriesDeaths |> 
+    group_by(Country_Region, Date) |> 
+    summarise(Deaths = sum(Deaths)) |> 
+    filter (Country_Region %in% c("US","Canada","Mexico")) |> 
+    ggplot(aes(x = Date,  y = Deaths, color = Country_Region)) + 
+      geom_point() +
+      geom_line() +
+      ggtitle("COVID-19 Cumulative Deaths") + 
+      labs(y = "# of Deaths")
+
+```
+
+### Exercise 5
+
+Make a graph with the countries of your choice using the **daily deaths** data
+
+```{r}
+
+timeSeriesDeaths_daily <-timeSeriesDeaths |> 
+    group_by(Country_Region, Date) |> 
+    summarise(Deaths = sum(Deaths)) |> 
+    mutate(Daily = Deaths - lag(Deaths, default = first(Deaths)))
+
+timeSeriesDeaths_daily |> 
+    filter (Country_Region %in% c("Singapore","Malaysia","Taiwan*", 
+                                "Indonesia")) |> 
+    ggplot(aes(x = Date, y = Daily, color = Country_Region)) + 
+      geom_line() +
+      ggtitle("Daily COVID-19 Deaths") +
+      labs(y = "# of Deaths")
+
+```
+
+### Exercise 6
+
+Make an animation of your choosing (do **not** use a graph with geom_smooth)
+
+```{r}
+
+exerciseAnimated <- timeSeriesDeaths_daily |>
+  filter (Country_Region %in% c("Singapore","Malaysia","Taiwan*", "Mongolia", 
+                                "Indonesia", "China", "Thailand", "Turkey")) |>
+  ggplot(aes(x = Country_Region, y = Deaths, color= Country_Region)) + 
+    geom_point(aes(size = Deaths)) + 
+    transition_time(Date) + 
+    labs(title = "Cumulative COVID-19 Deaths: {frame_time}") + 
+    ylab("Deaths") +
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+
+animate(exerciseAnimated, renderer = gifski_renderer(), end_pause = 15)
+
+```
